@@ -15,13 +15,16 @@ app.set('view engine', 'handlebars');
 app.set('port', process.env.PORT || 3000);
 
 
-
-
-
 app
 
     //Static Middle Ware
     .use(express.static(__dirname + '/public'))
+
+    //Detect Query String Middle Ware
+    .use(function(req, res, next){
+        req.locals.showTests = app.get('env') !== 'production' && req.query.test === '1';
+        next();
+    })
 
     //Home Page
     .get('/', function(req, res){
