@@ -5,7 +5,7 @@ var express = require('express');
 
 var app = express();
 
-var fortune = require('./lib/fortune.js');
+var fortune = require('../lib/fortune.js');
 
 //Handlebars
 var handlebars = require('express-handlebars').create({ defaultLayout : 'main'});
