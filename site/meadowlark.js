@@ -22,7 +22,7 @@ app
 
     //Detect Query String Middle Ware
     .use(function(req, res, next){
-        req.locals.showTests = app.get('env') !== 'production' && req.query.test === '1';
+        res.locals.showTests = app.get('env') !== 'production' && req.query.test === '1';
         next();
     })
 
@@ -33,7 +33,13 @@ app
 
     //About Page
     .get('/about', function(req, res){
-        res.render('about', {fortune: fortune.getFortune()});
+        res.render(
+            'about',
+            {
+                fortune: fortune.getFortune(),
+                pageTestScript: '/qa/tests-about.js'
+            }
+        );
     })
 
     //Custom 404 Page
