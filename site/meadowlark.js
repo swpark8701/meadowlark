@@ -15,6 +15,8 @@ app.set('view engine', 'handlebars');
 app.set('port', process.env.PORT || 3000);
 
 
+//if(app.thing === null ) console.log('bleat!');
+
 app
 
     //Static Middle Ware
@@ -24,6 +26,14 @@ app
     .use(function(req, res, next){
         res.locals.showTests = app.get('env') !== 'production' && req.query.test === '1';
         next();
+    })
+
+    //Header Info
+    .get('/headers', function(req, res){
+        res.type('text/plain');
+        var s = '';
+        for(var name in req.headers) s+= name + ': ' + req.headers[name] + '\n';
+        res.send(s);
     })
 
     //Home Page
@@ -40,6 +50,16 @@ app
                 pageTestScript: '/qa/tests-about.js'
             }
         );
+    })
+
+    //Hood river
+    .get('/tours/hood-river', function(req, res){
+        res.render('tours/hood-river');
+    })
+
+    //Request Group Rate
+    .get('/tours/request-group-rate', function(req, res){
+        res.render('tours/request-group-rate');
     })
 
     //Custom 404 Page
