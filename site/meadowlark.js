@@ -24,6 +24,12 @@ var handlebars = require('express-handlebars')
                     );
 
 
+//formidable
+var formidable = require('formidable');
+
+//jQuery Upload MiddleWare
+var jqupload = require('jquery-file-upload-middleware');
+
 
 //if(app.thing === null ) console.log('bleat!');
 
@@ -60,6 +66,20 @@ app
         if(!res.locals.partials) res.locals.partials = {};
         res.locals.partials.weatherContext = getWeatherData();
         next();
+    })
+
+    //jQuery Upload Middle Ware
+    .use('/upload', function(req, res, next){
+        var now = Date.now();
+        jqupload.fileHandler({
+            uploadDir: function(){
+                return __dirname + '/public/uploads/' + now;
+            },
+            uploadUrl: function(){
+                return '/uploads/' + now;
+            }
+        })(req, res, next);
+
     })
 
     //Header Info
@@ -217,7 +237,36 @@ app
         console.log('CSRF token (from hidden form field): ' + req.body._csrf);
         console.log('Name (from visible form field): ' + req.body.name);
         console.log('Email (from visible form field): ' + req.body.email);
-        res.redirect(303, '/thank-you');
+
+        if(req.xhr || req.accepts('json,html') === 'json'){
+            res.send({success: true});
+            //TODO :: If Error, Send error Json
+        }else{
+            //TODO :: If Error, Redirect To Error Page
+            res.redirect(303, '/thank-you');
+        }
+    })
+
+    //PhotoContest Form
+    .get('/contest/vacation-photo', function(req, res){
+        var now = new Date();
+        res.render('contest/vacation-photo', {
+            year: now.getFullYear(),
+            month: now.getMonth()
+        });
+    })
+
+    //PhotoContest Form Process
+    .post('/contest/vacation-photo/:year/:month', function(req, res){
+        var form = new formidable.IncomingForm();
+        form.parse(req, function(err, fields, files){
+            if(err) return res.redirect(303, '/error');
+            console.log('received fields:');
+            console.log(fields);
+            console.log('received files:');
+            console.log(files);
+            res.redirect(303, '/thank-you');
+        });
     })
 
     //Custom 500 Page
