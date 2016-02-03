@@ -39,6 +39,11 @@ var tours = [
     { id: 1, name: 'Oregon Coast', price: 149.95 }
 ];
 
+//Credentials
+var credentials = require('./credentials.js');
+
+
+var VALID_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 app
     .engine('hbs', handlebars.engine)
@@ -80,6 +85,39 @@ app
             }
         })(req, res, next);
 
+    })
+
+    //Cookie Parser Middle Ware
+    .use(require('cookie-parser')(credentials.cookieSecret))
+
+    //Express Session
+    .use(require('express-session')({
+        resave : false,
+        saveUninitialized: false,
+        secret: credentials.cookieSecret
+    }))
+
+    //Flash Message Middle ware
+    .use(function(req, res, next){
+        res.locals.flash = req.session.flash;
+        delete req.session.flash;
+        next();
+    })
+
+
+    //Custom Middle Ware
+    .use(function(req, res, next){
+        console.log('processing request for"' + req.url + '"....');
+        next();
+    })
+
+    .use(function(req, res, next){
+        console.log('terminating request');
+        res.send('thanks for playing!');
+    })
+
+    .use(function(req, res, next){
+        console.log('whoops, i\'ll never get called!');
     })
 
     //Header Info
@@ -231,6 +269,36 @@ app
         //What is CSRF?!
         res.render('newsletter', { csrf: 'CSRF token goes here' });
     })
+
+    .post('/newsletter', function(req, res){
+        var name = req.body.name || '', email = req.body.email || '';
+
+        //Validation Check
+        if(!email.match(VALID_EMAIL_REGEX)){
+            if(req.xhr) return res.json({ error: 'Invalid name email address.'});
+            req.session.flash = {
+                type: 'danger',
+                intro: 'Validation error!',
+                message: 'The email address you entered was not valid.'
+            };
+            return res.redirect(303, '/newsletter/archive');
+        }
+
+        new NewsletterSignup({name: name, email: email}).save(function(err){
+            if(err){
+                if(req.xhr) return res.json({ error: 'Database error'});
+                req.session.flash = {
+                    type: 'danger',
+                    intro: 'Database error!',
+                    message: 'There was a database error; please try again later.'
+                }
+
+                return res.redirect(303, '/newsletter/archive');
+            };
+        })
+
+    })
+
 
     .post('/process', function(req, res){
         console.log('Form (from querystring): ' + req.query.form);

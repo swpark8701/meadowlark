@@ -7,6 +7,14 @@
         {{{_sections.head}}}
     </head>
     <body>
+
+        {{#if flash}}
+            <div class="alert alert-dismissible alert-{{flash.type}}">
+                <button class="close" type="button" data-dismiss="alert" aria-hidden="true">&times;</button>
+                <strong>{{flash.intro}}</strong> {{{flash.message}}}
+            </div>
+        {{/if}}
+
         {{{body}}}
         <script src="//code.jquery.com/jquery-2.0.2.min.js"></script>
         <script src="/vendor/BS3/bootstrap.min.js"></script>
