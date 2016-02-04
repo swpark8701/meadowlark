@@ -5,7 +5,13 @@ var express = require('express');
 
 var app = express();
 
+//Credentials
+var credentials = require('./credentials.js');
+
 var fortune = require('../lib/fortune.js');
+
+//Custom Mailer
+var emailService = require('../lib/email.js')(credentials);
 
 //Handlebars
 var handlebars = require('express-handlebars')
@@ -31,6 +37,8 @@ var formidable = require('formidable');
 var jqupload = require('jquery-file-upload-middleware');
 
 
+
+
 //if(app.thing === null ) console.log('bleat!');
 
 //Mock
@@ -39,11 +47,33 @@ var tours = [
     { id: 1, name: 'Oregon Coast', price: 149.95 }
 ];
 
-//Credentials
-var credentials = require('./credentials.js');
+
 
 
 var VALID_EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+
+
+//Node Mailer
+var nodemailer = require('nodemailer');
+
+var transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth:{
+        user: credentials.gmail.user,
+        pass: credentials.gmail.password
+    }
+})
+
+//
+//transporter.sendMail({
+//    from: '"swp" <seone2000@daum.net>',
+//    to : 'seone2000@naver.com',
+//    subject : 'Your Meadowlark Travel Tour',
+//    text: 'Thank you for booking tour trip with Meadowlark Travel. We look forward to your visit!'
+//}, function(err){
+//    if(err) console.error('Unable to send email: ' + err);
+//})
+
 
 app
     .engine('hbs', handlebars.engine)
@@ -106,19 +136,19 @@ app
 
 
     //Custom Middle Ware
-    .use(function(req, res, next){
-        console.log('processing request for"' + req.url + '"....');
-        next();
-    })
-
-    .use(function(req, res, next){
-        console.log('terminating request');
-        res.send('thanks for playing!');
-    })
-
-    .use(function(req, res, next){
-        console.log('whoops, i\'ll never get called!');
-    })
+    //.use(function(req, res, next){
+    //    console.log('processing request for"' + req.url + '"....');
+    //    next();
+    //})
+    //
+    //.use(function(req, res, next){
+    //    console.log('terminating request');
+    //    res.send('thanks for playing!');
+    //})
+    //
+    //.use(function(req, res, next){
+    //    console.log('whoops, i\'ll never get called!');
+    //})
 
     //Header Info
     .get('/headers', function(req, res){
@@ -135,6 +165,20 @@ app
 
     //About Page
     .get('/about', function(req, res){
+
+        var cart = {
+            billing : {
+                name : 'TEST=~PORDUCT'
+            },
+            number : 5
+        };
+
+        res.render('email/cart-thank-you', { layout: null, cart: cart }, function(err, html){
+            if(err) console.log('error in email template');
+            emailService.send('seone2000@naver.com', 'yesMan', html);
+        });
+
+
         res.render(
             'about',
             {
@@ -335,6 +379,47 @@ app
             console.log(files);
             res.redirect(303, '/thank-you');
         });
+    })
+
+    .get('/cart/checkout', function(req, res, next){
+        var cart = req.session.cart;
+        console.log(':::::::::::::::::::::::CART- GET');
+        if(!cart) next();
+        res.render('cart-checkout');
+    })
+
+    .post('/cart/checkout', function(req, res, next){
+        var cart = req.session.cart;
+        console.log(':::::::::::::::::::::::CART- POST');
+        if(!cart) next(new Error('Cart does not exist.'));
+        var name = req.body.name || '';
+        var email = req.body.email || '';
+
+        //Validation check
+        if(!email.match(VALID_EMAIL_REGEX))
+            return res.next(new Error('Invalid email address.'));
+
+        //Random Cart Id
+        cart.number = Math.random().toString().replace(/^0\.0*/, '');
+        cart.billing = {
+            name : name,
+            email: email
+        };
+        res.render('email/cart-thank-you', { layout: null, cart: cart }, function(err, html){
+            if(err) console.log('error in email template');
+
+            transporter.sendMail({
+                from: '"swp" <seone2000@daum.net>',
+                to : cart.billing.email,
+                subject : 'Thank you for Book your Trip with Meadowlark',
+                html : html,
+                generateTextFromHtml: true
+            }, function(err){
+                if(err) console.error('Unable to send confirmation: ' + err.stack);
+            });
+        });
+
+        res.render('cart-thank-you', { cart: cart });
     })
 
     //Custom 500 Page
