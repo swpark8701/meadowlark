@@ -13,6 +13,8 @@ var fortune = require('../lib/fortune.js');
 //Custom Mailer
 var emailService = require('../lib/email.js')(credentials);
 
+var fs = require('fs');
+
 //Handlebars
 var handlebars = require('express-handlebars')
                     .create(
@@ -24,6 +26,9 @@ var handlebars = require('express-handlebars')
                                     if(!this._sections) this._sections = {};
                                     this._sections[name] = options.fn(this);
                                     return null;
+                                },
+                                static: function(name){
+                                    return require('../lib/static.js').map(name);
                                 }
                             }
                         }
@@ -86,6 +91,105 @@ switch(app.get('env')){
 }
 
 
+
+
+//File
+var dataDir = __dirname + '/data';
+var vacationPhotoDir = dataDir + '/vacation-photo';
+fs.existsSync(dataDir) || fs.mkdirSync(dataDir);
+fs.existsSync(vacationPhotoDir) || fs.mkdirSync(vacationPhotoDir);
+
+function saveContestEntry(contestName, email, year, mont, photoPath){
+    //TODO:: Complete Later
+}
+
+
+
+//DB
+var mongoose = require('mongoose');
+var opts ={
+    server: {
+        socketOptions: { keepAlive: 1}
+    }
+};
+switch(app.get('env')){
+    case 'development' :
+        mongoose.connect(credentials.mongo.development.connectionString, opts);
+        break;
+    case 'production' :
+        mongoose.connect(credentials.mongo.production.connectionString, opts);
+        break;
+    default :
+        throw new Error('Unknown execution environment: ', app.get('env'));
+}
+
+
+var Vacation = require('./models/vacation.js');
+
+Vacation.find(function(err, vacations){
+
+    if(err) return console.error(err);
+    if(vacations.length) return;
+
+    new Vacation({
+        name: 'Hood River Day Trip',
+        slug: 'hood-river-day-trip',
+        category: 'Day Trip',
+        sku: 'HR199',
+        description : 'Spend a day sailing on the Columbia and enjoying craft beers in Hood River!',
+        priceInCents: 9995,
+        tags: ['day trip', 'hood river', 'sailing', 'windsurfing', 'breweries'],
+        inSeason: true,
+        maximumGuests: 16,
+        available: true,
+        packagesSold: 0
+    }).save();
+
+    new Vacation({
+        name: 'Oregon Coast Getaway',
+        slug: 'oregon-coast-gataway',
+        category: 'Weekend Getaway',
+        sku: 'OC39',
+        description: 'Enjoy the ocean air and quaint coastal towns!',
+        priceInCents: 269995,
+        tags: ['weekend geaway', 'oregon coast', 'beachcombing'],
+        inSeason: false,
+        maximumGuests: 8,
+        available: true,
+        packagesSold:0
+    }).save();
+
+    new Vacation({
+        name: 'Rock Climbing in Bend',
+        slug: 'rock-climbing-in-bend',
+        category: 'Adventure',
+        sku: 'B99',
+        description: 'Experience the thrill of climbing in the high desert.',
+        priceInCents: 289995,
+        tags: ['weekend geaway', 'bend', 'high desert', 'rock climbing'],
+        inSeason: true,
+        maximunGuests: 4,
+        available: false,
+        packagesSold : 0,
+        notes: 'The tour guide is currently recovering from a skiing accident.'
+    }).save();
+
+
+});
+
+
+var VacationInSeasonListener = require('./models/vacationInSeasonListener.js');
+
+
+var MongoSessionStore = require('session-mongoose')(require('connect'));
+var sessionStore = new MongoSessionStore({
+    url : credentials.mongo[app.get('env')].connectionString
+});
+
+
+var bundler = require('connect-bundle')(require('./config.js'));
+app.use(bundler);
+
 app
     .engine('hbs', handlebars.engine)
 
@@ -146,6 +250,9 @@ app
 
     })
 
+    //CORS
+    .use('/api', require('cors')())
+
     //Static Middle Ware
     .use(express.static(__dirname + '/public'))
 
@@ -186,7 +293,8 @@ app
     .use(require('express-session')({
         resave : false,
         saveUninitialized: false,
-        secret: credentials.cookieSecret
+        secret: credentials.cookieSecret,
+        store: sessionStore
     }))
 
     //Flash Message Middle ware
@@ -217,304 +325,118 @@ app
         var cluster = require('cluster');
         if(cluster.isWorker) console.log('Worker %d received request', cluster.worker.id);
         next();
-    })
-
-    //Header Info
-    .get('/headers', function(req, res){
-        res.type('text/plain');
-        var s = '';
-        for(var name in req.headers) s+= name + ': ' + req.headers[name] + '\n';
-        res.send(s);
-    })
-
-    //Home Page
-    .get('/', function(req, res){
-        res.render('home');
-    })
-
-    //Fail PAge
-    .get('/fail', function(req, res){
-        throw new Error('Nope!');
-    })
-
-    //Uncaught Error
-    .get('/epic-fail', function(req, res){
-       process.nextTick(function(){
-          throw new Error('Kaboom!');
-       });
-    })
-
-    //About Page
-    .get('/about', function(req, res){
-
-        var cart = {
-            billing : {
-                name : 'TEST=~PORDUCT'
-            },
-            number : 5
-        };
-
-        res.render('email/cart-thank-you', { layout: null, cart: cart }, function(err, html){
-            if(err) console.log('error in email template');
-            emailService.send('seone2000@naver.com', 'yesMan', html);
-        });
+    });
 
 
-        res.render(
-            'about',
-            {
-                fortune: fortune.getFortune(),
-                pageTestScript: '/qa/tests-about.js'
-            }
-        );
-    })
+var static = require('../lib/static.js').map;
 
-    //Hood river
-    .get('/tours/hood-river', function(req, res){
-        res.render('tours/hood-river');
-    })
+app.use(function(req, res, next){
+   var now = new Date();
+    res.locals.logoImage = now.getMonth()==11 && now.getDate() == 19 ? static('/img/logo_bud_clark.png') : static('/img/logo.png');
+    next();
+});
 
-    //Request Group Rate
-    .get('/tours/request-group-rate', function(req, res){
-        res.render('tours/request-group-rate');
-    })
 
-    //ErrorPage
-    .get('/error', function(req, res){
-        res
-            .status(500)
-            .render('500');
-    })
+//Route
+require('./route.js')(app);
 
-    //Parameters
-    .get('/greeting', function(req, res){
-        res.render('about', {
-            message: 'welcome',
-            style: req.query.style,
-            //userid: req.cookie.userid,
-            //username: req.session.username
-        });
-    })
+var vhost = require('vhost');
 
-    //No-layout
-    .get('/no-layout', function(req, res){
-        res.render('no-layout', { layout: null });
-    })
+var Attraction = require('./models/attraction.js');
+// API configuration
+var apiOptions = {
+    context: '/',
+    domain: require('domain').create(),
+};
 
-    //Custom Layout
-    .get('/custom-layout', function(req, res){
-        res.render('custom-layout', {layout: 'custom'});
-    })
+apiOptions.domain.on('error', function(err){
+    console.log('API domain error.\n', err.stack);
+    setTimeout(function(){
+        console.log('Server shutting down after API domain error.');
+        process.exit(1);
+    }, 5000);
+    server.close();
+    var worker = require('cluster').worker;
+    if(worker) worker.disconnect();
+});
 
-    //Test Text
-    .get('/test', function(req, res){
-        res
-            .type('text/plain')
-            .send('this is a test');
-    })
 
-    //Thank you page
-    .get('/thank-you', function(req, res){
-        res.render('thank-you');
-    })
+var rest = require('connect-rest').create(apiOptions);
 
-    //Basic Form Process
-    .post('/process-contact', function(req, res){
-        console.log('Received contact from ' + req.body.name + ' <' + req.body.email + '>');
-        //TODO:: Save To DB
-        res.redirect(303, '/thank-you');
-    })
+// link API into pipeline
+app.use(vhost('api.*', rest.processRequest(apiOptions)));
 
-    //Advance Form Process
-    .post('/process-contact-adv', function(req, res){
-        //TODO :: Must Use Body-Parser Middle Ware
-
-        console.log('Received contact from ' + req.body.name + ' <' + req.body.email + '>');
-
-        try{
-
-            //TODO:: Save To DB
-
-            return res.xhr ? res.render({success: true}) : res.redirect(303, '/thank-you');
-
-        }catch(ex){
-            return res.xhr ? res.render({error : 'DB Error'}) : res.redirect(303, '/db-error');
-        }
-    })
-
-    //Web API - Basic Get
-    .get('/api/tours', function(req, res){
-        res.json(tours);
-    })
-
-    //Web Api - PUT
-    .put('/api/tour/:id', function(req, res){
-        var p = tours.filter(function(p){ return p.id == req.params.id;})[0];
-        if(p){
-            if( req.query.name ) p.name = req.query.name;
-            if( req.query.price ) p.price = req.query.price;
-            res.json({success: true});
-        }else{
-            res.json({error : 'No such tour exists.'});
-        }
-    })
-
-    //Web Api - DEL
-    .del('/api/tour/:id', function(req, res){
-        var i;
-        for(i=tours.length-1; i>=0; i--)
-            if(tours[i].id == req.params.id) break;
-
-        if(i >= 0){
-            tours.splice(i, 1);
-            res.json({success:true});
-        }else{
-            res.json({error:'No such tour exists.'});
-        }
-
-    })
-
-    //Client Template
-    .get('/nursery-rhyme', function(req, res){
-        res.render('nursery-rhyme');
-    })
-
-    //Client Template Data
-    .get('/data/nursery-rhyme', function(req, res){
-        res.json({
-            animal: 'squirrel',
-            bodyPart: 'tail',
-            adjective: 'bushy',
-            noun: 'heck'
-        });
-    })
-
-    //NewsLetter Form
-    .get('/newsletter', function(req, res){
-        //What is CSRF?!
-        res.render('newsletter', { csrf: 'CSRF token goes here' });
-    })
-
-    .post('/newsletter', function(req, res){
-        var name = req.body.name || '', email = req.body.email || '';
-
-        //Validation Check
-        if(!email.match(VALID_EMAIL_REGEX)){
-            if(req.xhr) return res.json({ error: 'Invalid name email address.'});
-            req.session.flash = {
-                type: 'danger',
-                intro: 'Validation error!',
-                message: 'The email address you entered was not valid.'
+rest.get('/attractions', function(req, content, cb){
+    Attraction.find({ approved: true }, function(err, attractions){
+        if(err) return cb({ error: 'Internal error.' });
+        cb(null, attractions.map(function(a){
+            return {
+                name: a.name,
+                description: a.description,
+                location: a.location,
             };
-            return res.redirect(303, '/newsletter/archive');
-        }
+        }));
+    });
+});
 
-        new NewsletterSignup({name: name, email: email}).save(function(err){
-            if(err){
-                if(req.xhr) return res.json({ error: 'Database error'});
-                req.session.flash = {
-                    type: 'danger',
-                    intro: 'Database error!',
-                    message: 'There was a database error; please try again later.'
-                };
+rest.post('/attraction', function(req, content, cb){
+    var a = new Attraction({
+        name: req.body.name,
+        description: req.body.description,
+        location: { lat: req.body.lat, lng: req.body.lng },
+        history: {
+            event: 'created',
+            email: req.body.email,
+            date: new Date(),
+        },
+        approved: false,
+    });
+    a.save(function(err, a){
+        if(err) return cb({ error: 'Unable to add attraction.' });
+        cb(null, { id: a._id });
+    });
+});
 
-                return res.redirect(303, '/newsletter/archive');
-            }
+rest.get('/attraction/:id', function(req, content, cb){
+    Attraction.findById(req.params.id, function(err, a){
+        if(err) return cb({ error: 'Unable to retrieve attraction.' });
+        cb(null, {
+            name: a.name,
+            description: a.description,
+            location: a.location,
         });
+    });
+});
 
-    })
 
+//Custom 500 Page
+app.use(function(err, req, res, next){
+   console.error(err.stack) ;
+    res.status(500)
+    .render('500');
+});
 
-    .post('/process', function(req, res){
-        console.log('Form (from querystring): ' + req.query.form);
-        console.log('CSRF token (from hidden form field): ' + req.body._csrf);
-        console.log('Name (from visible form field): ' + req.body.name);
-        console.log('Email (from visible form field): ' + req.body.email);
+var autoViews = {};
 
-        if(req.xhr || req.accepts('json,html') === 'json'){
-            res.send({success: true});
-            //TODO :: If Error, Send error Json
-        }else{
-            //TODO :: If Error, Redirect To Error Page
-            res.redirect(303, '/thank-you');
-        }
-    })
+app.use(function(req, res, next){
 
-    //PhotoContest Form
-    .get('/contest/vacation-photo', function(req, res){
-        var now = new Date();
-        res.render('contest/vacation-photo', {
-            year: now.getFullYear(),
-            month: now.getMonth()
-        });
-    })
+    var path = req.path.toLowerCase();
+    if(autoViews[path]) return res.render(autoViews[path]);
 
-    //PhotoContest Form Process
-    .post('/contest/vacation-photo/:year/:month', function(req, res){
-        var form = new formidable.IncomingForm();
-        form.parse(req, function(err, fields, files){
-            if(err) return res.redirect(303, '/error');
-            console.log('received fields:');
-            console.log(fields);
-            console.log('received files:');
-            console.log(files);
-            res.redirect(303, '/thank-you');
-        });
-    })
+    if(fs.existsSync(__dirname + '/views' + path + '.hbs')){
+        autoViews[path] = path.replace(/^\//, '');
+        return res.render(autoViews[path]);
+    }
 
-    .get('/cart/checkout', function(req, res, next){
-        var cart = req.session.cart;
-        console.log(':::::::::::::::::::::::CART- GET');
-        if(!cart) next();
-        res.render('cart-checkout');
-    })
+    next();
 
-    .post('/cart/checkout', function(req, res, next){
-        var cart = req.session.cart;
-        console.log(':::::::::::::::::::::::CART- POST');
-        if(!cart) next(new Error('Cart does not exist.'));
-        var name = req.body.name || '';
-        var email = req.body.email || '';
-
-        //Validation check
-        if(!email.match(VALID_EMAIL_REGEX))
-            return res.next(new Error('Invalid email address.'));
-
-        //Random Cart Id
-        cart.number = Math.random().toString().replace(/^0\.0*/, '');
-        cart.billing = {
-            name : name,
-            email: email
-        };
-        res.render('email/cart-thank-you', { layout: null, cart: cart }, function(err, html){
-            if(err) console.log('error in email template');
-
-            transporter.sendMail({
-                from: '"swp" <seone2000@daum.net>',
-                to : cart.billing.email,
-                subject : 'Thank you for Book your Trip with Meadowlark',
-                html : html,
-                generateTextFromHtml: true
-            }, function(err){
-                if(err) console.error('Unable to send confirmation: ' + err.stack);
-            });
-        });
-
-        res.render('cart-thank-you', { cart: cart });
-    })
-
-    //Custom 500 Page
-    .use(function(err, req, res, next){
-       console.error(err.stack) ;
-        res.status(500)
-        .render('500');
-    })
+});
 
     //Custom 404 Page
-    .use(function(req, res){
-        res.status(404);
-        res.render('404');
-    });
+app.use(function(req, res){
+    res.status(404);
+    res.render('404');
+});
 
 
 //var server = app.listen(app.get('port'), function(){
@@ -561,4 +483,14 @@ function getWeatherData(){
           }
       ]
     };
+}
+
+
+function convertFromUSD(value, currency){
+    switch(currency){
+        case 'USD' : return value * 1;
+        case 'GBP' : return value * 0.6;
+        case 'BTC' : return value * 0.0023707918444761;
+        default: return NaN;
+    }
 }

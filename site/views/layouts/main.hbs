@@ -4,10 +4,13 @@
         <title>Meadowlark Travel</title>
         <link rel="stylesheet" href="/vendor/BS3/bootstrap.min.css">
         <link rel="stylesheet" href="/vendor/BS3/bootstrap-theme.min.css">
+        {{#each _bundles.css}}
+            <link rel="stylesheet" href="{{static .}}">
+        {{/each}}
         {{{_sections.head}}}
     </head>
     <body>
-
+    
         {{#if flash}}
             <div class="alert alert-dismissible alert-{{flash.type}}">
                 <button class="close" type="button" data-dismiss="alert" aria-hidden="true">&times;</button>
@@ -15,9 +18,21 @@
             </div>
         {{/if}}
 
+        <img src="{{logoImage}}" alt="">
+        
+        
         {{{body}}}
         <script src="//code.jquery.com/jquery-2.0.2.min.js"></script>
         <script src="/vendor/BS3/bootstrap.min.js"></script>
+        {{#each _bundles.js.head}}
+            <script src="{{static .}}"></script>
+        {{/each}}
+        <script>
+            var static = {
+                IMG_CART_EMPTY: '{{static '/img/shop/cart_empty.png'}}',
+                IMG_CART_FULL: '{{static '/img/shop/cart_full.png'}}'
+            }
+        </script>
         {{{_sections.jquery}}}
     </body>
 </html>
