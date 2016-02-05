@@ -62,7 +62,7 @@ var transporter = nodemailer.createTransport({
         user: credentials.gmail.user,
         pass: credentials.gmail.password
     }
-})
+});
 
 //
 //transporter.sendMail({
@@ -74,6 +74,17 @@ var transporter = nodemailer.createTransport({
 //    if(err) console.error('Unable to send email: ' + err);
 //})
 
+switch(app.get('env')){
+    case 'development' :
+        app.use(require('morgan')('dev'));
+        break;
+    case 'production' :
+        app.use(require('express-logger')({
+            path: __dirname + '/log/requests.log'
+        }));
+        break;
+}
+
 
 app
     .engine('hbs', handlebars.engine)
@@ -83,6 +94,57 @@ app
     .set('port', process.env.PORT || 3000)
 
     .disable('x-powered-by')
+
+    //Domain
+    .use(function(req, res, next){
+
+        // Create Domain for Request
+        var domain = require('domain').create();
+
+        // Process Error Occurs in Domain
+        domain.on('error', function(err){
+
+            console.error('DOMAIN ERROR CAUGHT\n', err.stack);
+            try{
+
+                //Safely Shutdown After 5Seconds
+                setTimeout(function(){
+                    console.error('Failsafe shutdown.');
+                    process.exit(1);
+                }, 5000);
+
+                //Disconnect Cluster
+                var worker = require('cluster').worker;
+                if(worker) worker.disconnect();
+
+                //Stop Receiving Request
+                server.close();
+                try{
+                    //Try Express Error Route
+                    next(err);
+                }catch(err){
+
+                    //If Fail Express Error Route, Use General Node Response.
+                    console.error('Express error mechanism failed.\n', err.stack);
+                    res.statusCode = 500;
+                    res.set('text/plain');
+                    res.end('Server Error.');
+                }
+
+            }catch(err){
+
+                console.error('unable to send 500 response.\n', err.stack);
+
+            }
+        });
+
+        domain.add(req);
+        domain.add(res);
+
+        // Other Request Process to Domain
+        domain.run(next);
+
+    })
 
     //Static Middle Ware
     .use(express.static(__dirname + '/public'))
@@ -150,6 +212,13 @@ app
     //    console.log('whoops, i\'ll never get called!');
     //})
 
+    //Worker Info
+    .use(function(req, res, next){
+        var cluster = require('cluster');
+        if(cluster.isWorker) console.log('Worker %d received request', cluster.worker.id);
+        next();
+    })
+
     //Header Info
     .get('/headers', function(req, res){
         res.type('text/plain');
@@ -161,6 +230,18 @@ app
     //Home Page
     .get('/', function(req, res){
         res.render('home');
+    })
+
+    //Fail PAge
+    .get('/fail', function(req, res){
+        throw new Error('Nope!');
+    })
+
+    //Uncaught Error
+    .get('/epic-fail', function(req, res){
+       process.nextTick(function(){
+          throw new Error('Kaboom!');
+       });
     })
 
     //About Page
@@ -335,11 +416,11 @@ app
                     type: 'danger',
                     intro: 'Database error!',
                     message: 'There was a database error; please try again later.'
-                }
+                };
 
                 return res.redirect(303, '/newsletter/archive');
-            };
-        })
+            }
+        });
 
     })
 
@@ -425,21 +506,33 @@ app
     //Custom 500 Page
     .use(function(err, req, res, next){
        console.error(err.stack) ;
-        res.status(500);
-        res.render('500');
+        res.status(500)
+        .render('500');
     })
 
     //Custom 404 Page
     .use(function(req, res){
         res.status(404);
         res.render('404');
-    })
-
-    //Listen
-    .listen(app.get('port'), function(){
-       console.log('Express Started on http://localhost:' + app.get('port') + '; press Ctrl + C to terminate.');
     });
 
+
+//var server = app.listen(app.get('port'), function(){
+//   console.log('Listeing on port %d', app.get('port'));
+//});
+
+function startServer(){
+    //Listen
+    app.listen(app.get('port'), function(){
+       console.log('Express Started in ' + app.get('env') + ' mode on http://localhost:' + app.get('port') + '; press Ctrl + C to terminate.');
+    });
+}
+
+if(require.main === module){
+    startServer();
+}else{
+    module.exports = startServer;
+}
 
 //Mock Weather Data Get Function
 function getWeatherData(){
