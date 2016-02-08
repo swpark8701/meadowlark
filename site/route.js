@@ -248,6 +248,16 @@ module.exports = function(app){
             });
         })
 
+        .get('/account', function(req, res){
+            if(!req.user)
+                return res.redirect(303, '/unauthorized');
+            res.render('account', { username: req.user.name });
+        })
+
+        .get('/unauthorized', function(req, res){
+            res.status(403).render('unauthorized');
+        })
+
         //.get('/cart/checkout', function(req, res, next){
         //    var cart = req.session.cart;
         //    console.log(':::::::::::::::::::::::CART- GET');
@@ -384,7 +394,7 @@ module.exports = function(app){
                     return res.redirect(303, '/vacations');
                 }
             );
-        })
+        });
 
         //.get('/api/attractions', function(req, res){
         //    Attraction.find({ approved: true }, function(err, attractions){

@@ -1,12 +1,12 @@
 /**
  * Created by sewonpark on 2016-02-05.
  */
-//function smartJoin(arr, separator){
-//    if(!separator) separator = ' ';
-//    return arr.filter(function(elt){
-//        return elt!==undefined && elt!==null && elt.toString().trim() !== '';
-//    }).join(separator);
-//}
+function smartJoin(arr, separator){
+    if(!separator) separator = ' ';
+    return arr.filter(function(elt){
+        return elt!==undefined && elt!==null && elt.toString().trim() !== '';
+    }).join(separator);
+}
 //
 //moudle.exports = function(customer, orders){
 //    return{
@@ -41,5 +41,21 @@ var _ = require('underscore');
 
 function getCustomerViewModel(customer, orders){
     var vm = _.omit(customer, 'salesNotes');
-    return _.extend(vm, )
+    return _.extend(vm, {
+        name: smartJoin([vm.firstName, vm.lastName]),
+        fullAddress: smartjoin([
+            customer.address1,
+            customer.city + ', ' +
+            customer.state + ' ' +
+            customer.zip
+        ], '<br />'),
+        orders: orders.map(function(order){
+            return {
+                orderNumber: order.orderNumber,
+                date: order.date,
+                status: order.status,
+                url: '/orders/' + order.orderNumber
+            };
+        })
+    });
 }

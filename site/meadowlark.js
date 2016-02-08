@@ -1,6 +1,8 @@
 /**
  * Created by sewonpark on 2016-02-01.
  */
+
+var https = require('https');
 var express = require('express');
 
 var app = express();
@@ -14,6 +16,17 @@ var fortune = require('../lib/fortune.js');
 var emailService = require('../lib/email.js')(credentials);
 
 var fs = require('fs');
+
+
+var httpsOptions = {
+    key: fs.readFileSync('../ssl/meadowlark.pem'),
+    cert: fs.readFileSync('../ssl/meadowlark.crt')
+};
+
+
+
+
+
 
 //Handlebars
 var handlebars = require('express-handlebars')
@@ -177,7 +190,6 @@ Vacation.find(function(err, vacations){
 
 });
 
-
 var VacationInSeasonListener = require('./models/vacationInSeasonListener.js');
 
 
@@ -185,6 +197,15 @@ var MongoSessionStore = require('session-mongoose')(require('connect'));
 var sessionStore = new MongoSessionStore({
     url : credentials.mongo[app.get('env')].connectionString
 });
+
+var auth = require('../lib/auth.js')(app, {
+    baseUrl: process.env.BASE_URL,
+    providers: credentials.authProviders,
+    successRedirect: '/account',
+    failureRedirect: '/unauthorized'
+});
+
+
 
 
 var bundler = require('connect-bundle')(require('./config.js'));
@@ -297,6 +318,13 @@ app
         store: sessionStore
     }))
 
+    .use(require('csurf')())
+    .use(function(req, res, next){
+        res.locals._csrfToken = req.csrfToken();
+        next();
+    })
+
+
     //Flash Message Middle ware
     .use(function(req, res, next){
         res.locals.flash = req.session.flash;
@@ -336,6 +364,10 @@ app.use(function(req, res, next){
     next();
 });
 
+
+auth.init();
+
+auth.registerRoutes();
 
 //Route
 require('./route.js')(app);
@@ -444,7 +476,12 @@ app.use(function(req, res){
 //});
 
 function startServer(){
-    //Listen
+    ////Listen
+    //https.createServer(httpsOptions, app).listen(app.get('port'), function(){
+    //    console.log('Express Started in ' + app.get('env') + ' mode on http://localhost:' + app.get('port') + '; press Ctrl + C to terminate.');
+    //});
+
+
     app.listen(app.get('port'), function(){
        console.log('Express Started in ' + app.get('env') + ' mode on http://localhost:' + app.get('port') + '; press Ctrl + C to terminate.');
     });
